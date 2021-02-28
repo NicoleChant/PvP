@@ -22,8 +22,13 @@ class Player():
 	"critical_strike_dmg",
 	"evade_chance",
 	"base_dmg",
+	"attack_speed",
+	"multiple_strike_chance",
+	"num_of_multiple_strikes",
+	"DPS",
 	"mana",
 	"mana_regen_unit",
+	"casting_speed",
 	"spell_power",
 	"hp_regen",
 	"hp_regen_unit",
@@ -41,8 +46,13 @@ class Player():
 	   "evade_chance":0,
 	   "mana":0,
 	   "mana_regen":0,
+	   "multiple_strike_chance":0,
+	   "num_of_multiple_strikes":2,
+	   "casting_speed":0,
 	   "spell_power":0,
 	   "base_dmg":5,
+	   "alive":True,
+	   "attack_speed":1,
 	   "hp_regen":0,
 	   "hp_regen_unit":1,
 	   "gold":500,
@@ -50,13 +60,16 @@ class Player():
 	   "max_inventory":6
 	}
 
+	time_unit = "sec"
+
 	def __init__(self,name="Alice"):
 			self.name = name.strip()
 			for key, value in Player.default_attrs.items():
 						  setattr(self,key,value)
-			setattr(self,"effective_health",self.effective_hp())
-			self.alive = True #default value
+			self.effective_health = self.effective_hp()
+			#self.alive = True #default value
 			self.max_hp = self.hp #initial hp cap
+			self.resper = 1.0 #resurrection max_hp%
 
 			#self.init_regen()
 			#TODO TO BE IMPLEMENTED (Parallel processing)
@@ -125,18 +138,18 @@ class Player():
 
 	def resurrect(self):
 		if self.alive:
-			print("Player {:s} is alive. You cannot ressurect an alive player.".format(self.name))
+			print("Player {:s} is alive. You cannot resurrect an alive player.".format(self.name))
 		else:
 			self.hp = self.max_hp*(1-self.resper)
 			print("Player {:s} has been resurrected with {:1.2f}/% total hp (={:1.2f} hp).".format(
 				self.name,100*self.hp/self.max_hp,self.hp))
 
-	 
+	def restore_to_maxhp(self):
+		self.hp = self.max_hp
 
 	def is_alive(self):
-		self.alive = True if self.hp>0 else False
+		self.alive = self.hp>0
 		return self.alive
-	
 
 	@property
 	def normal_dmg(self,mu,var):
@@ -164,6 +177,7 @@ class Player():
 			)
 		  ) if self.base_dmg>=0 else 0
 
+
 	def init_regen(self):
 			self.hp += self.hp_regen
 			self.mana += self.mana_regen
@@ -174,14 +188,29 @@ class Player():
 	def critical_strike(self):
 		return 1 if random.random()<=self.critical_chance else 0
 
-	def apply_dmg(self,on_armor=0):
-		crit_str = self.critical_strike()
-		if crit_str == 1: print("CRITICAL STRIKE!")
-		return self.reduced_dmg(on_armor)*(1+crit_str*self.critical_strike_dmg)
+	def multiple_strike(self):
+		return 1 if random.random()<=self.multiple_strike_chance else 0
 
-	def attack(self,other):
+	def apply_multiple_strikes(self,induced_dmg):
+		return induced_dmg*self.num_of_multiple_strikes
+
+	def apply_dmg(self,on_armor=0,true_dmg=False):
+		crit_strik = self.critical_strike()
+		multiple_strik = self.multiple_strike()
+		if crit_strik == 1: print("CRITICAL STRIKE!")
+		if multiple_strik == 1: print("{} MULTIPLE STRIKES".format(self.num_of_multiple_strikes))
+		if not true_dmg:
+			return self.reduced_dmg(on_armor)*(
+			1+crit_strik*self.critical_strike_dmg) if multiple_strik==0 else self.reduced_dmg(on_armor)*(
+			1+crit_strik*self.critical_strike_dmg)*self.num_of_multiple_strikes
+		else:
+			return self.base_dmg*(
+			1+crit_strik*self.critical_strike_dmg) if multiple_strik==0 else self.reduced_dmg(on_armor)*(
+			1+crit_strik*self.critical_strike_dmg)*self.num_of_multiple_strikes
+
+	def attack(self,other,true_dmg=False):
 		if isinstance(other,Player):
-				induced_dmg = self.apply_dmg(other.armor)*(1-other.evaded_strike())
+				induced_dmg = self.apply_dmg(other.armor,true_dmg)*(1-other.evaded_strike())
 				other.hp -= induced_dmg
 				print(induced_dmg)
 				return induced_dmg
